@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Demo A* Pathfinding</title>
+  <style>
+    /* Style cơ bản */
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+
+    /* Khu vực nút điều khiển */
+    #controls {
+      margin-bottom: 10px;
+    }
+
+    #controls button, #controls label {
+      margin: 0 5px;
+    }
+
+    /* Lưới 20x20, mỗi ô 30x30 */
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(20, 30px);
+      grid-template-rows: repeat(20, 30px);
+      gap: 1px;
+      user-select: none;
+    }
+
+    /* Style cho mỗi ô */
+    .cell {
+      width: 30px;
+      height: 30px;
+      background: #f7f7f7;
+      border: 1px solid #171717;
+    }
+
+    /* Các trạng thái ô */
+    .cell.obstacle { background: #333; }                 /* Chướng ngại vật */
+    .cell.start { background: #0a0 !important; }         /* Điểm bắt đầu */
+    .cell.end   { background: #a00 !important; }         /* Điểm kết thúc */
+    .cell.open { background: #8f8; }                     /* Đang xét */
+    .cell.closed { background: rgb(210, 203, 203); }     /* Đã xét */
+    .cell.path { background: #ff0; }                     /* Đường đi */
+  </style>
+</head>
+
+<body>
+  <div id="controls">
+    <button id="clear">Xóa Lưới</button>
+    <button id="run">Chạy A*</button>
+    <label> Tốc độ: <input type="range" id="speed" min="0" max="200" value="20"></label>
+  </div>
+
+  <div id="grid"></div>
+
+  <script>
+    const rows = 20, cols = 20;
+
+    // Các hướng đi: 8 hướng (nếu chỉ cần 4 hướng thì xóa các dòng đi chéo)
+    const dirs = [
+      {dx: -1, dy:  0, cost: 1}, // lên
+      {dx:  1, dy:  0, cost: 1}, // xuống
+      {dx:  0, dy: -1, cost: 1}, // trái
+      {dx:  0, dy:  1, cost: 1}, // phải
+      {dx: -1, dy: -1, cost: Math.SQRT2}, // chéo trái trên
+      {dx: -1, dy:  1, cost: Math.SQRT2}, // chéo phải trên
+      {dx:  1, dy: -1, cost: Math.SQRT2}, // chéo trái dưới
+      {dx:  1, dy:  1, cost: Math.SQRT2}  // chéo phải dưới
+    ];
+
+    let startCell = null, endCell = null;
+    let setting = 0, drawing = false;
+    const gridEl = document.getElementById('grid');
+    const speedControl = document.getElementById('speed');
+    const grid = [];
+
+    // Tạo lưới và gán thuộc tính từng ô
+    for (let i = 0; i < rows; i++) {
+      grid[i] = [];
+      for (let j = 0; j < cols; j++) {
+        const el = document.createElement('div');
+        el.classList.add('cell');
+        el.dataset.i = i;
+        el.dataset.j = j;
+        gridEl.appendChild(el);
+        grid[i][j] = {
+          i, j, el,
+          obstacle: false,
+          g: Infinity, h: 0, f: Infinity, // A* cost
+          prev: null,
+          closed: false
+        };
+      }
+    }
+
+    // Click phải để chọn điểm Start và End
+    gridEl.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      const el = e.target;
+      if (!el.classList.contains('cell')) return;
+      const node = grid[+el.dataset.i][+el.dataset.j];
+      if (setting === 0) {
+        if (startCell) startCell.el.classList.remove('start');
+        startCell = node;
+        startCell.el.classList.add('start');
+        setting = 1;
+      } else if (setting === 1) {
+        if (endCell) endCell.el.classList.remove('end');
+        endCell = node;
+        endCell.el.classList.add('end');
+        setting = 2;
+      }
+    });
+
+    // Chuột trái giữ để vẽ chướng ngại vật
+    gridEl.addEventListener('mousedown', e => {
+      if (e.button === 0) {
+        drawing = true;
+        toggleObs(e.target);
+      }
+    });
+    gridEl.addEventListener('mousemove', e => {
+      if (drawing) toggleObs(e.target);
+    });
+    document.addEventListener('mouseup', () => drawing = false);
+
+    function toggleObs(el) {
+      if (!el.classList.contains('cell')) return;
+      const node = grid[+el.dataset.i][+el.dataset.j];
+      if (node === startCell || node === endCell) return;
+      node.obstacle = true;
+      node.el.classList.add('obstacle');
+    }
+
+    // Nút "Xóa Lưới"
+    document.getElementById('clear').onclick = () => {
+      startCell = endCell = null;
+      setting = 0;
+      grid.flat().forEach(n => {
+        n.obstacle = false;
+        n.g = Infinity;
+        n.h = 0;
+        n.f = Infinity;
+        n.prev = null;
+        n.closed = false;
+        n.el.className = 'cell';
+      });
+    };
+
+    // Nút "Chạy A*"
+    document.getElementById('run').onclick = () => {
+      if (!startCell || !endCell) return alert('Chưa đặt Start/End!');
+      aStar();
+    };
+
+    // Hàm heuristic (Euclidean distance)
+    function heuristic(a, b) {
+      return Math.hypot(a.i - b.i, a.j - b.j);
+    }
+
+    // Thuật toán A* (chạy async để có hiệu ứng delay)
+    async function aStar() {
+      // Reset lại thông số từng ô
+      grid.flat().forEach(n => {
+        n.g = Infinity; n.h = 0; n.f = Infinity;
+        n.prev = null; n.closed = false;
+        n.el.classList.remove('open', 'closed', 'path');
+      });
+
+      const openSet = [];
+      startCell.g = 0;
+      startCell.h = heuristic(startCell, endCell);
+      startCell.f = startCell.h;
+      openSet.push(startCell);
+
+      while (openSet.length) {
+        openSet.sort((a, b) => a.f - b.f); // Chọn ô có f nhỏ nhất
+        const cur = openSet.shift();       // Lấy node ra khỏi openSet
+
+        if (cur.closed) continue;
+        if (cur !== startCell && cur !== endCell)
+          cur.el.classList.replace('open', 'closed');
+        cur.closed = true;
+
+        if (cur === endCell) return reconstruct(cur); // Đã tới đích
+
+        for (const {dx, dy, cost} of dirs) {
+          const ni = cur.i + dx, nj = cur.j + dy;
+          if (ni < 0 || ni >= rows || nj < 0 || nj >= cols) continue;
+          const nb = grid[ni][nj];
+          if (nb.obstacle || nb.closed) continue;
+
+          const gNew = cur.g + cost;
+          if (gNew < nb.g) {
+            nb.g = gNew;
+            nb.h = heuristic(nb, endCell);
+            nb.f = nb.g + nb.h;
+            nb.prev = cur;
+            if (!openSet.includes(nb)) {
+              openSet.push(nb);
+              if (nb !== endCell)
+                nb.el.classList.add('open');
+            }
+          }
+        }
+
+        // Đợi theo tốc độ người dùng chọn
+        await new Promise(r => setTimeout(r, parseInt(speedControl.value)));
+      }
+
+      alert('Không tìm thấy đường!');
+    }
+
+    // Dò ngược lại từ End để vẽ đường đi
+    function reconstruct(endNode) {
+      let cur = endNode;
+      while (cur.prev) {
+        if (cur !== startCell && cur !== endCell)
+          cur.el.classList.add('path');
+        cur = cur.prev;
+      }
+    }
+  </script>
+</body>
+</html>
