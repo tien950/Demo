@@ -164,7 +164,21 @@
       return Math.hypot(a.i - b.i, a.j - b.j);
     }
 
-    // Thuật toán A* (chạy async để có hiệu ứng delay)
+    // Hàm vẽ đường đi tạm thời từ start đến node hiện tại
+    function updatePath(cur) {
+      // Xóa đường path cũ
+      grid.flat().forEach(n => n.el.classList.remove('path'));
+      // Dò ngược từ cur về start
+      let temp = cur;
+      while (temp.prev) {
+        if (temp !== startCell && temp !== endCell) {
+          temp.el.classList.add('path');
+        }
+        temp = temp.prev;
+      }
+    }
+
+    // Thuật toán A* (async để có hiệu ứng)
     async function aStar() {
       // Reset lại thông số từng ô
       grid.flat().forEach(n => {
@@ -180,15 +194,21 @@
       openSet.push(startCell);
 
       while (openSet.length) {
-        openSet.sort((a, b) => a.f - b.f); // Chọn ô có f nhỏ nhất
-        const cur = openSet.shift();       // Lấy node ra khỏi openSet
+        openSet.sort((a, b) => a.f - b.f);
+        const cur = openSet.shift();
 
         if (cur.closed) continue;
         if (cur !== startCell && cur !== endCell)
           cur.el.classList.replace('open', 'closed');
         cur.closed = true;
 
-        if (cur === endCell) return reconstruct(cur); // Đã tới đích
+        // Hiển thị đường tạm thời
+        updatePath(cur);
+
+        if (cur === endCell) {
+          // Vẽ đường chính thức
+          return reconstruct(cur);
+        }
 
         for (const {dx, dy, cost} of dirs) {
           const ni = cur.i + dx, nj = cur.j + dy;
@@ -210,14 +230,14 @@
           }
         }
 
-        // Đợi theo tốc độ người dùng chọn
+        // Đợi theo tốc độ user chọn
         await new Promise(r => setTimeout(r, parseInt(speedControl.value)));
       }
 
       alert('Không tìm thấy đường!');
     }
 
-    // Dò ngược lại từ End để vẽ đường đi
+    // Vẽ lại đường cuối cùng từ end về start
     function reconstruct(endNode) {
       let cur = endNode;
       while (cur.prev) {
