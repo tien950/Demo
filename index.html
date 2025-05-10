@@ -3,11 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Demo A* Pathfinding (8 hướng)</title>
+  <title>Demo A* Pathfinding (4 & 8 hướng)</title>
   <style>
     body { font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; }
     #controls { margin-bottom: 10px; }
     #controls button, #controls label { margin: 0 5px; }
+    #direction-controls { display: inline-block; margin-left: 10px; }
+    #direction-controls label { margin-right: 10px; font-size: 14px; }
     #grid { display: grid; grid-template-columns: repeat(20, 30px); grid-template-rows: repeat(20, 30px); gap: 1px; user-select: none; }
     .cell { width: 30px; height: 30px; background: #f7f7f7; border: 1px solid #171717; }
     .cell.obstacle { background: #333; }
@@ -23,20 +25,27 @@
     <button id="clear">Xóa Lưới</button>
     <button id="run">Chạy A*</button>
     <label> Tốc độ: <input type="range" id="speed" min="0" max="200" value="20"></label>
+    <div id="direction-controls">
+      <label><input type="radio" name="dirs" value="4" checked>4 hướng</label>
+      <label><input type="radio" name="dirs" value="8">8 hướng</label>
+    </div>
   </div>
   <div id="grid"></div>
 
   <script>
     const rows = 20, cols = 20;
-    const dirs = [
+    const DIRS4 = [
       {dx: -1, dy:  0, cost: 1}, {dx:  1, dy:  0, cost: 1},
-      {dx:  0, dy: -1, cost: 1}, {dx:  0, dy:  1, cost: 1},
-      // {dx: -1, dy: -1, cost: Math.SQRT2}, {dx: -1, dy:  1, cost: Math.SQRT2},
-      // {dx:  1, dy: -1, cost: Math.SQRT2}, {dx:  1, dy:  1, cost: Math.SQRT2}
+      {dx:  0, dy: -1, cost: 1}, {dx:  0, dy:  1, cost: 1}
+    ];
+    const DIRS8 = [
+      ...DIRS4,
+      {dx: -1, dy: -1, cost: Math.SQRT2}, {dx: -1, dy:  1, cost: Math.SQRT2},
+      {dx:  1, dy: -1, cost: Math.SQRT2}, {dx:  1, dy:  1, cost: Math.SQRT2}
     ];
 
     let startCell = null, endCell = null;
-    let setting = 0, drawing = false;
+    let drawing = false;
     const gridEl = document.getElementById('grid');
     const speedControl = document.getElementById('speed');
     const grid = [];
@@ -59,14 +68,10 @@
       const el = e.target;
       if (!el.classList.contains('cell')) return;
       const node = grid[+el.dataset.i][+el.dataset.j];
-      if (setting === 0) {
-        if (startCell) startCell.el.classList.remove('start');
+      if (!startCell) {
         startCell = node; startCell.el.classList.add('start');
-        setting = 1;
-      } else if (setting === 1) {
-        if (endCell) endCell.el.classList.remove('end');
+      } else if (!endCell) {
         endCell = node; endCell.el.classList.add('end');
-        setting = 2;
       }
     });
 
@@ -83,7 +88,7 @@
     }
 
     document.getElementById('clear').onclick = () => {
-      startCell = endCell = null; setting = 0;
+      startCell = endCell = null;
       grid.flat().forEach(n => {
         n.obstacle=false; n.g=Infinity; n.h=0; n.f=Infinity; n.prev=null; n.closed=false;
         n.el.className='cell';
@@ -92,26 +97,26 @@
 
     document.getElementById('run').onclick = () => {
       if (!startCell || !endCell) return alert('Chưa đặt Start/End!');
-      aStar();
+      const mode = document.querySelector('input[name="dirs"]:checked').value;
+      aStar(mode);
     };
 
     function heuristic(a, b) { return Math.hypot(a.i-b.i, a.j-b.j); }
 
-    async function aStar() {
+    async function aStar(mode) {
+      const dirs = mode === '8' ? DIRS8 : DIRS4;
       grid.flat().forEach(n => { n.g=Infinity; n.h=0; n.f=Infinity; n.prev=null; n.closed=false;
         n.el.classList.remove('open','closed','path');
       });
       const openSet = [];
-      startCell.g=0; startCell.h=heuristic(startCell,endCell); startCell.f=startCell.h;
+      startCell.g=0; startCell.h=heuristic(startCell,endCell); startCell.f= startCell.h;
       openSet.push(startCell);
 
       while (openSet.length) {
         openSet.sort((a,b)=>a.f-b.f);
         const cur = openSet.shift();
         if (cur.closed) continue;
-        if (cur!==startCell && cur!==endCell) {
-          cur.el.classList.replace('open','closed');
-        }
+        if (cur!==startCell && cur!==endCell) cur.el.classList.replace('open','closed');
         cur.closed = true;
         if (cur===endCell) return reconstruct(cur);
 
@@ -121,7 +126,7 @@
           const nb = grid[ni][nj]; if (nb.obstacle||nb.closed) continue;
           const gNew = cur.g + cost;
           if (gNew < nb.g) {
-            nb.g = gNew; nb.h = heuristic(nb,endCell); nb.f = nb.g+nb.h; nb.prev = cur;
+            nb.g = gNew; nb.h = heuristic(nb,endCell); nb.f = nb.g + nb.h; nb.prev = cur;
             if (!openSet.includes(nb)) {
               openSet.push(nb);
               if (nb!==endCell) nb.el.classList.add('open');
