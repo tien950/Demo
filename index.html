@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Demo A* Pathfinding (Nhóm 9)</title>
+  <title>Demo Pathfinding (Nhóm 9)</title>
   <style>
     /* Style cơ bản */
     body {
@@ -19,7 +19,7 @@
       margin-bottom: 10px;
     }
 
-    #controls button, #controls label {
+    #controls button, #controls label, #controls select {
       margin: 0 5px;
     }
 
@@ -41,38 +41,45 @@
     }
 
     /* Các trạng thái ô */
-    .cell.obstacle { background: #333; }                 /* Chướng ngại vật */
-    .cell.start { background: #0a0 !important; }         /* Điểm bắt đầu */
-    .cell.end   { background: #a00 !important; }         /* Điểm kết thúc */
-    .cell.open { background: #8f8; }                     /* Đang xét */
-    .cell.closed { background: rgb(210, 203, 203); }     /* Đã xét */
-    .cell.path { background: #ff0; }                     /* Đường đi */
+    .cell.obstacle { background: #333; }
+    .cell.start    { background: #0a0 !important; }
+    .cell.end      { background: #a00 !important; }
+    .cell.open     { background: #8f8; }
+    .cell.closed   { background: rgb(210, 203, 203); }
+    .cell.path     { background: #ff0; }
   </style>
 </head>
 
 <body>
   <div id="controls">
     <button id="clear">Xóa Lưới</button>
-    <button id="run">Chạy A*</button>
-    <label> Tốc độ: <input type="range" id="speed" min="0" max="200" value="20"></label>
+    <label>Thuật toán:
+      <select id="algorithm">
+        <option value="astar">A* Search</option>
+        <option value="dijkstra">Dijkstra</option>
+        <option value="bfs">BFS</option>
+        <option value="dfs">DFS</option>
+      </select>
+    </label>
+    <button id="run">Chạy</button>
+    <label>Tốc độ: <input type="range" id="speed" min="0" max="200" value="20"></label>
   </div>
 
   <div id="grid"></div>
 
   <script>
     const rows = 20, cols = 20;
-
-    // Các hướng đi: 8 hướng (nếu chỉ cần 4 hướng thì xóa các dòng đi chéo)
     const dirs = [
-      {dx: -1, dy:  0, cost: 1}, // lên
-      {dx:  1, dy:  0, cost: 1}, // xuống
-      {dx:  0, dy: -1, cost: 1}, // trái
-      {dx:  0, dy:  1, cost: 1}, // phải
-      {dx: -1, dy: -1, cost: Math.SQRT2}, // chéo trái trên
-      {dx: -1, dy:  1, cost: Math.SQRT2}, // chéo phải trên
-      {dx:  1, dy: -1, cost: Math.SQRT2}, // chéo trái dưới
-      {dx:  1, dy:  1, cost: Math.SQRT2}  // chéo phải dưới
+      {dx: -1, dy:  0, cost: 1},
+      {dx:  1, dy:  0, cost: 1},
+      {dx:  0, dy: -1, cost: 1},
+      {dx:  0, dy:  1, cost: 1},
+      {dx: -1, dy: -1, cost: Math.SQRT2},
+      {dx: -1, dy:  1, cost: Math.SQRT2},
+      {dx:  1, dy: -1, cost: Math.SQRT2},
+      {dx:  1, dy:  1, cost: Math.SQRT2}
     ];
+    const dirs4 = dirs.slice(0, 4);
 
     let startCell = null, endCell = null;
     let setting = 0, drawing = false;
@@ -80,7 +87,7 @@
     const speedControl = document.getElementById('speed');
     const grid = [];
 
-    // Tạo lưới và gán thuộc tính từng ô
+    // Khởi tạo lưới
     for (let i = 0; i < rows; i++) {
       grid[i] = [];
       for (let j = 0; j < cols; j++) {
@@ -89,17 +96,11 @@
         el.dataset.i = i;
         el.dataset.j = j;
         gridEl.appendChild(el);
-        grid[i][j] = {
-          i, j, el,
-          obstacle: false,
-          g: Infinity, h: 0, f: Infinity, // A* cost
-          prev: null,
-          closed: false
-        };
+        grid[i][j] = { i, j, el, obstacle: false, g: Infinity, h: 0, f: Infinity, prev: null, closed: false };
       }
     }
 
-    // Click phải để chọn điểm Start và End
+    // Đặt Start/End với click phải
     gridEl.addEventListener('contextmenu', e => {
       e.preventDefault();
       const el = e.target;
@@ -118,18 +119,10 @@
       }
     });
 
-    // Chuột trái giữ để vẽ chướng ngại vật
-    gridEl.addEventListener('mousedown', e => {
-      if (e.button === 0) {
-        drawing = true;
-        toggleObs(e.target);
-      }
-    });
-    gridEl.addEventListener('mousemove', e => {
-      if (drawing) toggleObs(e.target);
-    });
+    // Vẽ chướng ngại vật
+    gridEl.addEventListener('mousedown', e => { if (e.button === 0) { drawing = true; toggleObs(e.target); } });
+    gridEl.addEventListener('mousemove', e => { if (drawing) toggleObs(e.target); });
     document.addEventListener('mouseup', () => drawing = false);
-
     function toggleObs(el) {
       if (!el.classList.contains('cell')) return;
       const node = grid[+el.dataset.i][+el.dataset.j];
@@ -138,7 +131,7 @@
       node.el.classList.add('obstacle');
     }
 
-    // Nút "Xóa Lưới"
+    // Xóa lưới
     document.getElementById('clear').onclick = () => {
       startCell = endCell = null;
       setting = 0;
@@ -153,49 +146,61 @@
       });
     };
 
-    // Nút "Chạy A*"
+    // Nút Chạy
     document.getElementById('run').onclick = () => {
       if (!startCell || !endCell) return alert('Chưa đặt Start/End!');
-      aStar();
+      const algo = document.getElementById('algorithm').value;
+      if (algo === 'astar') aStar();
+      else if (algo === 'dijkstra') dijkstra();
+      else if (algo === 'bfs') bfs();
+      else if (algo === 'dfs') dfs();
     };
 
-    // Hàm heuristic (Euclidean distance)
+    // Heuristic Euclidean
     function heuristic(a, b) {
       return Math.hypot(a.i - b.i, a.j - b.j);
     }
 
-    // Thuật toán A* (chạy async để có hiệu ứng delay)
-    async function aStar() {
-      // Reset lại thông số từng ô
-      grid.flat().forEach(n => {
-        n.g = Infinity; n.h = 0; n.f = Infinity;
-        n.prev = null; n.closed = false;
-        n.el.classList.remove('open', 'closed', 'path');
-      });
+    // Vẽ đường tạm
+    function updatePath(cur) {
+      grid.flat().forEach(n => n.el.classList.remove('path'));
+      let temp = cur;
+      while (temp.prev) {
+        if (temp !== startCell && temp !== endCell) temp.el.classList.add('path');
+        temp = temp.prev;
+      }
+    }
 
+    // Reconstruct đường
+    function reconstruct(endNode) {
+      let cur = endNode;
+      while (cur.prev) {
+        if (cur !== startCell && cur !== endCell) cur.el.classList.add('path');
+        cur = cur.prev;
+      }
+    }
+
+    // A* Search
+    async function aStar() {
+      grid.flat().forEach(n => { n.g = Infinity; n.h = 0; n.f = Infinity; n.prev = null; n.closed = false; n.el.classList.remove('open', 'closed', 'path'); });
       const openSet = [];
       startCell.g = 0;
       startCell.h = heuristic(startCell, endCell);
       startCell.f = startCell.h;
       openSet.push(startCell);
-
       while (openSet.length) {
-        openSet.sort((a, b) => a.f - b.f); // Chọn ô có f nhỏ nhất
-        const cur = openSet.shift();       // Lấy node ra khỏi openSet
-
+        openSet.sort((a, b) => a.f - b.f);
+        const cur = openSet.shift();
         if (cur.closed) continue;
-        if (cur !== startCell && cur !== endCell)
-          cur.el.classList.replace('open', 'closed');
+        if (cur !== startCell && cur !== endCell) cur.el.classList.replace('open', 'closed');
         cur.closed = true;
-
-        if (cur === endCell) return reconstruct(cur); // Đã tới đích
-
+        updatePath(cur);
+        if (cur === endCell) return reconstruct(cur);
         for (const {dx, dy, cost} of dirs) {
           const ni = cur.i + dx, nj = cur.j + dy;
           if (ni < 0 || ni >= rows || nj < 0 || nj >= cols) continue;
           const nb = grid[ni][nj];
           if (nb.obstacle || nb.closed) continue;
-
           const gNew = cur.g + cost;
           if (gNew < nb.g) {
             nb.g = gNew;
@@ -204,27 +209,99 @@
             nb.prev = cur;
             if (!openSet.includes(nb)) {
               openSet.push(nb);
-              if (nb !== endCell)
-                nb.el.classList.add('open');
+              if (nb !== endCell) nb.el.classList.add('open');
             }
           }
         }
-
-        // Đợi theo tốc độ người dùng chọn
         await new Promise(r => setTimeout(r, parseInt(speedControl.value)));
       }
-
       alert('Không tìm thấy đường!');
     }
 
-    // Dò ngược lại từ End để vẽ đường đi
-    function reconstruct(endNode) {
-      let cur = endNode;
-      while (cur.prev) {
-        if (cur !== startCell && cur !== endCell)
-          cur.el.classList.add('path');
-        cur = cur.prev;
+    // Dijkstra
+    async function dijkstra() {
+      grid.flat().forEach(n => { n.g = Infinity; n.f = Infinity; n.prev = null; n.closed = false; n.el.classList.remove('open', 'closed', 'path'); });
+      const openSet = [];
+      startCell.g = 0;
+      startCell.f = 0;
+      openSet.push(startCell);
+      while (openSet.length) {
+        openSet.sort((a, b) => a.g - b.g);
+        const cur = openSet.shift();
+        if (cur.closed) continue;
+        if (cur !== startCell && cur !== endCell) cur.el.classList.replace('open', 'closed');
+        cur.closed = true;
+        updatePath(cur);
+        if (cur === endCell) return reconstruct(cur);
+        for (const {dx, dy, cost} of dirs) {
+          const ni = cur.i + dx, nj = cur.j + dy;
+          if (ni < 0 || ni >= rows || nj < 0 || nj >= cols) continue;
+          const nb = grid[ni][nj];
+          if (nb.obstacle || nb.closed) continue;
+          const gNew = cur.g + cost;
+          if (gNew < nb.g) {
+            nb.g = gNew;
+            nb.f = nb.g;
+            nb.prev = cur;
+            if (!openSet.includes(nb)) {
+              openSet.push(nb);
+              if (nb !== endCell) nb.el.classList.add('open');
+            }
+          }
+        }
+        await new Promise(r => setTimeout(r, parseInt(speedControl.value)));
       }
+      alert('Không tìm thấy đường!');
+    }
+
+    // BFS
+    async function bfs() {
+      grid.flat().forEach(n => { n.prev = null; n.closed = false; n.el.classList.remove('open', 'closed', 'path'); });
+      const queue = [startCell];
+      startCell.closed = true;
+      while (queue.length) {
+        const cur = queue.shift();
+        if (cur !== startCell && cur !== endCell) cur.el.classList.add('closed');
+        updatePath(cur);
+        if (cur === endCell) return reconstruct(cur);
+        for (const {dx, dy} of dirs4) {
+          const ni = cur.i + dx, nj = cur.j + dy;
+          if (ni < 0 || ni >= rows || nj < 0 || nj >= cols) continue;
+          const nb = grid[ni][nj];
+          if (nb.obstacle || nb.closed) continue;
+          nb.closed = true;
+          nb.prev = cur;
+          queue.push(nb);
+          if (nb !== endCell) nb.el.classList.add('open');
+        }
+        await new Promise(r => setTimeout(r, parseInt(speedControl.value)));
+      }
+      alert('Không tìm thấy đường!');
+    }
+
+    // DFS
+    async function dfs() {
+      grid.flat().forEach(n => { n.prev = null; n.closed = false; n.el.classList.remove('open', 'closed', 'path'); });
+      const stack = [startCell];
+      startCell.closed = true;
+      while (stack.length) {
+        const cur = stack.pop();
+        if (cur !== startCell && cur !== endCell) cur.el.classList.add('closed');
+        updatePath(cur);
+        if (cur === endCell) return reconstruct(cur);
+        for (const {dx, dy} of dirs4) {
+          const ni = cur.i + dx, nj = cur.j + dy;
+          if (ni < 0 || ni >= rows || nj < 0 || nj >= cols) continue;
+          const nb = grid[ni][nj];
+          if (nb.obstacle || nb.closed) continue;
+          nb.closed = true;
+          nb.prev = cur;
+          stack.push(nb);
+          if (nb !== endCell) nb.el.classList.add('open');
+        }
+        await new Promise(r => setTimeout(r, parseInt(speedControl.value)));
+      }
+      alert('Không tìm thấy đường!');
     }
   </script>
 </body>
