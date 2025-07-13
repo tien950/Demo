@@ -13,6 +13,7 @@ let startCell = null, endCell = null;
 let drawing = false;
 const gridEl = document.getElementById('grid');
 const speedControl = document.getElementById('speed');
+const player = document.getElementById('player');
 const grid = [];
 
 // Khởi tạo lưới
@@ -58,6 +59,7 @@ document.getElementById('clear').onclick = () => {
     n.obstacle=false; n.g=Infinity; n.h=0; n.f=Infinity; n.prev=null; n.closed=false;
     n.el.className='cell';
   });
+  player.style.display = 'none';
 };
 
 document.getElementById('run').onclick = () => {
@@ -73,6 +75,7 @@ async function aStar(mode) {
   grid.flat().forEach(n => { n.g=Infinity; n.h=0; n.f=Infinity; n.prev=null; n.closed=false;
     n.el.classList.remove('open','closed','path');
   });
+  player.style.display = 'none';
   const openSet = [];
   startCell.g=0; startCell.h=heuristic(startCell,endCell); startCell.f= startCell.h;
   openSet.push(startCell);
@@ -104,9 +107,30 @@ async function aStar(mode) {
 }
 
 function reconstruct(endNode) {
+  const path = [];
   let cur = endNode;
   while (cur.prev) {
     if (cur!==startCell && cur!==endCell) cur.el.classList.add('path');
+    path.push(cur);
     cur = cur.prev;
   }
+  path.reverse();
+  animatePath(path);
+}
+
+function animatePath(path) {
+  if (!player) return;
+  const gridRect = gridEl.getBoundingClientRect();
+  const startRect = startCell.el.getBoundingClientRect();
+  player.style.left = (startRect.left - gridRect.left) + 'px';
+  player.style.top = (startRect.top - gridRect.top) + 'px';
+  player.style.display = 'flex';
+  (async () => {
+    for (const node of path) {
+      const rect = node.el.getBoundingClientRect();
+      player.style.left = (rect.left - gridRect.left) + 'px';
+      player.style.top = (rect.top - gridRect.top) + 'px';
+      await new Promise(r => setTimeout(r, 100));
+    }
+  })();
 }
