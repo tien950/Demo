@@ -9,14 +9,13 @@ const DIRS8 = [
   {dx:  1, dy: -1, cost: Math.SQRT2}, {dx:  1, dy:  1, cost: Math.SQRT2}
 ];
 
-let startCell = null, endCell = null;
-let drawing = false;
+let playerCell = null;
 const gridEl = document.getElementById('grid');
 const speedControl = document.getElementById('speed');
 const player = document.getElementById('player');
 const grid = [];
+let animating = false;
 
-// Khởi tạo lưới
 for (let i = 0; i < rows; i++) {
   grid[i] = [];
   for (let j = 0; j < cols; j++) {
@@ -28,109 +27,139 @@ for (let i = 0; i < rows; i++) {
   }
 }
 
-// Đặt Start/End bằng click phải
+placePlayerRandom();
+
+gridEl.addEventListener('click', e => {
+  const el = e.target;
+  if (!el.classList.contains('cell') || animating) return;
+  const node = grid[+el.dataset.i][+el.dataset.j];
+  if (node.obstacle) return;
+  runTo(node);
+});
+
 gridEl.addEventListener('contextmenu', e => {
   e.preventDefault();
   const el = e.target;
   if (!el.classList.contains('cell')) return;
   const node = grid[+el.dataset.i][+el.dataset.j];
-  if (!startCell) {
-    startCell = node; startCell.el.classList.add('start');
-  } else if (!endCell) {
-    endCell = node; endCell.el.classList.add('end');
-  }
+  if (node === playerCell) return;
+  node.obstacle = !node.obstacle;
+  node.el.classList.toggle('obstacle');
 });
 
-// Vẽ chướng ngại vật bằng giữ chuột trái
-gridEl.addEventListener('mousedown', e => { if (e.button===0) { drawing=true; toggleObs(e.target); } });
-gridEl.addEventListener('mousemove', e => { if (drawing) toggleObs(e.target); });
-document.addEventListener('mouseup', () => drawing = false);
+document.getElementById('clear').onclick = () => {
+  clearGrid();
+};
 
-function toggleObs(el) {
-  if (!el.classList.contains('cell')) return;
-  const node = grid[+el.dataset.i][+el.dataset.j];
-  if (node === startCell || node === endCell) return;
-  node.obstacle = true; node.el.classList.add('obstacle');
+document.getElementById('random').onclick = () => {
+  clearGrid(false);
+  randomObstacles();
+};
+
+function clearGrid(reposition = true) {
+  grid.flat().forEach(n => {
+    n.obstacle = false;
+    n.g = Infinity; n.h = 0; n.f = Infinity; n.prev = null; n.closed = false;
+    n.el.className = 'cell';
+  });
+  if (reposition) placePlayerRandom();
+  else updatePlayerPosition();
 }
 
-document.getElementById('clear').onclick = () => {
-  startCell = endCell = null;
+function randomObstacles(prob = 0.25) {
   grid.flat().forEach(n => {
-    n.obstacle=false; n.g=Infinity; n.h=0; n.f=Infinity; n.prev=null; n.closed=false;
-    n.el.className='cell';
+    if (n === playerCell) return;
+    if (Math.random() < prob) {
+      n.obstacle = true;
+      n.el.classList.add('obstacle');
+    }
   });
-  player.style.display = 'none';
-};
+}
 
-document.getElementById('run').onclick = () => {
-  if (!startCell || !endCell) return alert('Chưa đặt Start/End!');
+function placePlayerRandom() {
+  const cells = grid.flat().filter(n => !n.obstacle);
+  playerCell = cells[Math.floor(Math.random() * cells.length)];
+  updatePlayerPosition();
+}
+
+function updatePlayerPosition() {
+  const gridRect = gridEl.getBoundingClientRect();
+  const rect = playerCell.el.getBoundingClientRect();
+  player.style.left = (rect.left - gridRect.left) + 'px';
+  player.style.top = (rect.top - gridRect.top) + 'px';
+  player.style.display = 'flex';
+}
+
+function heuristic(a, b) { return Math.hypot(a.i - b.i, a.j - b.j); }
+
+async function runTo(dest) {
+  if (playerCell === dest) return;
   const mode = document.querySelector('input[name="dirs"]:checked').value;
-  aStar(mode);
-};
+  animating = true;
+  const path = await aStar(playerCell, dest, mode);
+  animating = false;
+  if (path) {
+    await animatePath(path);
+    playerCell = dest;
+  }
+}
 
-function heuristic(a, b) { return Math.hypot(a.i-b.i, a.j-b.j); }
-
-async function aStar(mode) {
+async function aStar(start, end, mode) {
   const dirs = mode === '8' ? DIRS8 : DIRS4;
-  grid.flat().forEach(n => { n.g=Infinity; n.h=0; n.f=Infinity; n.prev=null; n.closed=false;
+  grid.flat().forEach(n => {
+    n.g = Infinity; n.h = 0; n.f = Infinity; n.prev = null; n.closed = false;
     n.el.classList.remove('open','closed','path');
   });
-  player.style.display = 'none';
   const openSet = [];
-  startCell.g=0; startCell.h=heuristic(startCell,endCell); startCell.f= startCell.h;
-  openSet.push(startCell);
+  start.g = 0; start.h = heuristic(start, end); start.f = start.h;
+  openSet.push(start);
 
   while (openSet.length) {
-    openSet.sort((a,b)=>a.f-b.f);
+    openSet.sort((a,b) => a.f - b.f);
     const cur = openSet.shift();
     if (cur.closed) continue;
-    if (cur!==startCell && cur!==endCell) cur.el.classList.replace('open','closed');
+    if (cur !== start && cur !== end) cur.el.classList.replace('open','closed');
     cur.closed = true;
-    if (cur===endCell) return reconstruct(cur);
+    if (cur === end) return reconstruct(cur);
 
     for (const {dx,dy,cost} of dirs) {
-      const ni=cur.i+dx, nj=cur.j+dy;
-      if (ni<0||ni>=rows||nj<0||nj>=cols) continue;
-      const nb = grid[ni][nj]; if (nb.obstacle||nb.closed) continue;
+      const ni = cur.i + dx, nj = cur.j + dy;
+      if (ni < 0 || ni >= rows || nj < 0 || nj >= cols) continue;
+      const nb = grid[ni][nj];
+      if (nb.obstacle || nb.closed) continue;
       const gNew = cur.g + cost;
       if (gNew < nb.g) {
-        nb.g = gNew; nb.h = heuristic(nb,endCell); nb.f = nb.g + nb.h; nb.prev = cur;
+        nb.g = gNew; nb.h = heuristic(nb,end); nb.f = nb.g + nb.h; nb.prev = cur;
         if (!openSet.includes(nb)) {
           openSet.push(nb);
-          if (nb!==endCell) nb.el.classList.add('open');
+          if (nb !== end) nb.el.classList.add('open');
         }
       }
     }
     await new Promise(r => setTimeout(r, parseInt(speedControl.value)));
   }
   alert('Không tìm thấy đường!');
+  return null;
 }
 
 function reconstruct(endNode) {
   const path = [];
   let cur = endNode;
   while (cur.prev) {
-    if (cur!==startCell && cur!==endCell) cur.el.classList.add('path');
+    if (cur !== playerCell && cur !== endNode) cur.el.classList.add('path');
     path.push(cur);
     cur = cur.prev;
   }
-  path.reverse();
-  animatePath(path);
+  return path.reverse();
 }
 
-function animatePath(path) {
-  if (!player) return;
+async function animatePath(path) {
   const gridRect = gridEl.getBoundingClientRect();
-  const startRect = startCell.el.getBoundingClientRect();
-  player.style.left = (startRect.left - gridRect.left) + 'px';
-  player.style.top = (startRect.top - gridRect.top) + 'px';
-  player.style.display = 'flex';
-  (async () => {
-    for (const node of path) {
-      const rect = node.el.getBoundingClientRect();
-      player.style.left = (rect.left - gridRect.left) + 'px';
-      player.style.top = (rect.top - gridRect.top) + 'px';
-      await new Promise(r => setTimeout(r, 100));
-    }
-  })();
+  updatePlayerPosition();
+  for (const node of path) {
+    const rect = node.el.getBoundingClientRect();
+    player.style.left = (rect.left - gridRect.left) + 'px';
+    player.style.top = (rect.top - gridRect.top) + 'px';
+    await new Promise(r => setTimeout(r, 100));
+  }
 }
