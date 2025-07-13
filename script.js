@@ -29,6 +29,7 @@ for (let i = 0; i < rows; i++) {
 
 placePlayerRandom();
 
+// Left click moves the player to the selected cell
 gridEl.addEventListener('click', e => {
   const el = e.target;
   if (!el.classList.contains('cell') || animating) return;
@@ -37,10 +38,11 @@ gridEl.addEventListener('click', e => {
   runTo(node);
 });
 
+// Right click toggles obstacles so users can draw walls
 gridEl.addEventListener('contextmenu', e => {
   e.preventDefault();
   const el = e.target;
-  if (!el.classList.contains('cell')) return;
+  if (!el.classList.contains('cell') || animating) return;
   const node = grid[+el.dataset.i][+el.dataset.j];
   if (node === playerCell) return;
   node.obstacle = !node.obstacle;
@@ -52,8 +54,8 @@ document.getElementById('clear').onclick = () => {
 };
 
 document.getElementById('random').onclick = () => {
-  clearGrid(false);
-  randomObstacles();
+  clearGrid();       // reset grid and place player randomly
+  randomObstacles(); // then add new random obstacles
 };
 
 function clearGrid(reposition = true) {
