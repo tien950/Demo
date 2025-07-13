@@ -23,12 +23,14 @@
 <body>
   <div id="controls">
     <button id="clear">Xóa Lưới</button>
+    <button id="random">Ngẫu Nhiên</button>
     <button id="run">Chạy A*</button>
     <label> Tốc độ: <input type="range" id="speed" min="0" max="200" value="20"></label>
     <div id="direction-controls">
       <label><input type="radio" name="dirs" value="4" checked>4 hướng</label>
       <label><input type="radio" name="dirs" value="8">8 hướng</label>
     </div>
+    <span id="distance" style="margin-left:10px"></span>
   </div>
   <div id="grid"></div>
 
@@ -84,7 +86,8 @@
       if (!el.classList.contains('cell')) return;
       const node = grid[+el.dataset.i][+el.dataset.j];
       if (node === startCell || node === endCell) return;
-      node.obstacle = true; node.el.classList.add('obstacle');
+      node.obstacle = !node.obstacle;
+      node.el.classList.toggle('obstacle', node.obstacle);
     }
 
     document.getElementById('clear').onclick = () => {
@@ -93,10 +96,21 @@
         n.obstacle=false; n.g=Infinity; n.h=0; n.f=Infinity; n.prev=null; n.closed=false;
         n.el.className='cell';
       });
+      document.getElementById('distance').textContent = '';
+    };
+
+    document.getElementById('random').onclick = () => {
+      grid.flat().forEach(n => {
+        if (n === startCell || n === endCell) return;
+        const obs = Math.random() < 0.3;
+        n.obstacle = obs;
+        n.el.classList.toggle('obstacle', obs);
+      });
     };
 
     document.getElementById('run').onclick = () => {
       if (!startCell || !endCell) return alert('Chưa đặt Start/End!');
+      document.getElementById('distance').textContent = '';
       const mode = document.querySelector('input[name="dirs"]:checked').value;
       aStar(mode);
     };
@@ -140,10 +154,12 @@
 
     function reconstruct(endNode) {
       let cur = endNode;
+      let length = endNode.g;
       while (cur.prev) {
         if (cur!==startCell && cur!==endCell) cur.el.classList.add('path');
         cur = cur.prev;
       }
+      document.getElementById('distance').textContent = 'Chiều dài: ' + length.toFixed(2);
     }
   </script>
 </body>
