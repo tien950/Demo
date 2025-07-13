@@ -1,1 +1,25 @@
-abcf
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Demo A* Pathfinding</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="controls">
+    <button id="clear">Xóa Lưới</button>
+    <button id="run">Chạy A*</button>
+    <label> Tốc độ: <input type="range" id="speed" min="0" max="200" value="20"></label>
+    <div id="direction-controls">
+      <label><input type="radio" name="dirs" value="4" checked>4 hướng</label>
+      <label><input type="radio" name="dirs" value="8">8 hướng</label>
+    </div>
+  </div>
+  <div id="grid">
+    <div id="player">🚀</div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
