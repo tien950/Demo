@@ -3,7 +3,7 @@ body { font-family: Arial, sans-serif; display: flex; flex-direction: column; al
 #controls button, #controls label { margin: 0 5px; }
 #direction-controls { display: inline-block; margin-left: 10px; }
 #direction-controls label { margin-right: 10px; font-size: 14px; }
-#grid { display: grid; grid-template-columns: repeat(20, 30px); grid-template-rows: repeat(20, 30px); gap: 1px; user-select: none; }
+#grid { display: grid; grid-template-columns: repeat(20, 30px); grid-template-rows: repeat(20, 30px); gap: 1px; user-select: none; position: relative; }
 .cell { width: 30px; height: 30px; background: #f7f7f7; border: 1px solid #171717; }
 .cell.obstacle { background: #333; }
 .cell.start { background: #0a0 !important; }
@@ -11,3 +11,15 @@ body { font-family: Arial, sans-serif; display: flex; flex-direction: column; al
 .cell.open { background: #8f8; }
 .cell.closed { background: rgb(210, 203, 203); }
 .cell.path { background: #ff0; }
+
+#player {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font-size: 20px;
+  transition: left 0.1s linear, top 0.1s linear;
+}
